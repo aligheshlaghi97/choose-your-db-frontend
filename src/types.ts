@@ -15,6 +15,7 @@ export interface Question {
 export interface Answer {
   questionId: string;
   selectedChoices: string[];
+  textInput?: string;
 }
 
 export interface Recommendation {

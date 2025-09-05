@@ -38,7 +38,30 @@ function App() {
     }
   }
 
-  const handleAnswerSelect = (choice: string, isSelected: boolean) => {
+  const handleAnswerSelect = (choice: string) => {
+    const currentQuestion = questions[currentQuestionIndex]
+    const existingAnswerIndex = answers.findIndex(
+      answer => answer.questionId === currentQuestion.id
+    )
+
+    if (existingAnswerIndex >= 0) {
+      // Update existing answer with single choice
+      const updatedAnswers = [...answers]
+      updatedAnswers[existingAnswerIndex] = {
+        questionId: currentQuestion.id,
+        selectedChoices: [choice]
+      }
+      setAnswers(updatedAnswers)
+    } else {
+      // Add new answer with single choice
+      setAnswers([...answers, {
+        questionId: currentQuestion.id,
+        selectedChoices: [choice]
+      }])
+    }
+  }
+
+  const handleTextInput = (text: string) => {
     const currentQuestion = questions[currentQuestionIndex]
     const existingAnswerIndex = answers.findIndex(
       answer => answer.questionId === currentQuestion.id
@@ -47,34 +70,19 @@ function App() {
     if (existingAnswerIndex >= 0) {
       // Update existing answer
       const updatedAnswers = [...answers]
-      const currentChoices = updatedAnswers[existingAnswerIndex].selectedChoices || []
-      
-      if (isSelected) {
-        // Add choice if not already selected
-        if (!currentChoices.includes(choice)) {
-          updatedAnswers[existingAnswerIndex] = {
-            questionId: currentQuestion.id,
-            selectedChoices: [...currentChoices, choice]
-          }
-        }
-      } else {
-        // Remove choice if selected
-        const filteredChoices = currentChoices.filter(c => c !== choice)
-        updatedAnswers[existingAnswerIndex] = {
-          questionId: currentQuestion.id,
-          selectedChoices: filteredChoices
-        }
+      updatedAnswers[existingAnswerIndex] = {
+        questionId: currentQuestion.id,
+        selectedChoices: [],
+        textInput: text
       }
-      
       setAnswers(updatedAnswers)
     } else {
-      // Add new answer with single choice
-      if (isSelected) {
-        setAnswers([...answers, {
-          questionId: currentQuestion.id,
-          selectedChoices: [choice]
-        }])
-      }
+      // Add new answer with text input
+      setAnswers([...answers, {
+        questionId: currentQuestion.id,
+        selectedChoices: [],
+        textInput: text
+      }])
     }
   }
 
@@ -97,7 +105,12 @@ function App() {
       // Transform answers to match the expected API format
       const transformedAnswers: { [key: string]: string[] } = {}
       answers.forEach(answer => {
-        transformedAnswers[answer.questionId] = answer.selectedChoices
+        if (answer.selectedChoices.length > 0) {
+          transformedAnswers[answer.questionId] = answer.selectedChoices
+        } else if (answer.textInput) {
+          // For text input questions, send the text as a single choice
+          transformedAnswers[answer.questionId] = [answer.textInput]
+        }
       })
       
       const requestBody = {
@@ -129,6 +142,17 @@ function App() {
   const getCurrentAnswer = () => {
     const currentQuestion = questions[currentQuestionIndex]
     return answers.find(answer => answer.questionId === currentQuestion?.id)
+  }
+
+  const hasCurrentAnswer = () => {
+    const currentAnswer = getCurrentAnswer()
+    const currentQuestion = questions[currentQuestionIndex]
+    
+    if (currentQuestion.choices.length > 0) {
+      return (currentAnswer?.selectedChoices?.length || 0) > 0
+    } else {
+      return currentAnswer?.textInput && currentAnswer.textInput.trim().length > 0
+    }
   }
 
   if (loading) {
@@ -196,21 +220,33 @@ function App() {
         </div>
 
         <div className="mb-8">
-          <div className="space-y-3">
-            {currentQuestion.choices.map((choice, index) => (
-              <label key={index} className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  name={`question-${currentQuestion.id}`}
-                  value={choice}
-                  checked={currentAnswer?.selectedChoices?.includes(choice) || false}
-                  onChange={(e) => handleAnswerSelect(choice, e.target.checked)}
-                  className="mr-3 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-gray-700">{choice}</span>
-              </label>
-            ))}
-          </div>
+          {currentQuestion.choices.length > 0 ? (
+            <div className="space-y-3">
+              {currentQuestion.choices.map((choice, index) => (
+                <label key={index} className="flex items-center cursor-pointer">
+                  <input
+                    type="radio"
+                    name={`question-${currentQuestion.id}`}
+                    value={choice}
+                    checked={currentAnswer?.selectedChoices?.includes(choice) || false}
+                    onChange={() => handleAnswerSelect(choice)}
+                    className="mr-3 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-gray-700">{choice}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <div>
+              <textarea
+                value={currentAnswer?.textInput || ''}
+                onChange={(e) => handleTextInput(e.target.value)}
+                placeholder="Please enter your response here..."
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-vertical min-h-[100px]"
+                rows={4}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-between">
@@ -229,9 +265,9 @@ function App() {
           {isLastQuestion ? (
             <button
               onClick={handleSubmit}
-              disabled={submitting || !currentAnswer?.selectedChoices?.length}
+              disabled={submitting || !hasCurrentAnswer()}
               className={`px-6 py-2 rounded-lg font-medium ${
-                submitting || !currentAnswer?.selectedChoices?.length
+                submitting || !hasCurrentAnswer()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
@@ -241,9 +277,9 @@ function App() {
           ) : (
             <button
               onClick={handleNext}
-              disabled={!currentAnswer?.selectedChoices?.length}
+              disabled={!hasCurrentAnswer()}
               className={`px-6 py-2 rounded-lg font-medium ${
-                !currentAnswer?.selectedChoices?.length
+                !hasCurrentAnswer()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
